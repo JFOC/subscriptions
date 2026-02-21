@@ -165,7 +165,49 @@ class PlanSubscription extends Model
         return Carbon::now()->lt($graceEnd);
     }
 
+    public function daysUntilEnd(): ?int
+    {
+        if (! $this->ends_at || $this->ended()) {
+            return null;
+        }
+
+        return (int) Carbon::now()->diffInDays($this->ends_at, absolute: false);
+    }
+
+    public function daysUntilTrialEnd(): ?int
+    {
+        if (! $this->trial_ends_at || ! $this->onTrial()) {
+            return null;
+        }
+
+        return (int) Carbon::now()->diffInDays($this->trial_ends_at, absolute: false);
+    }
+
+    /**
+     * Check if cancellation is pending (canceled but not yet ended).
+     */
+    public function pendingCancellation(): bool
+    {
+        return $this->canceled_at !== null && ! $this->ended();
+    }
+
     // ── Lifecycle Actions ────────────────────────────────────────────
+
+    /**
+     * Undo a pending cancellation. Only works if the subscription hasn't ended yet.
+     */
+    public function reactivate(): static
+    {
+        if ($this->ended()) {
+            throw new LogicException('Cannot reactivate an ended subscription. Use renew() instead.');
+        }
+
+        $this->canceled_at = null;
+        $this->cancels_at = null;
+        $this->save();
+
+        return $this;
+    }
 
     public function cancel(bool $immediately = false): static
     {

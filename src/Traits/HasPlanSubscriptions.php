@@ -23,16 +23,36 @@ trait HasPlanSubscriptions
         );
     }
 
+    /**
+     * Get all active subscriptions (not ended, or on trial/grace).
+     */
     public function activePlanSubscriptions(): Collection
     {
         return $this->planSubscriptions->reject->inactive();
     }
 
+    /**
+     * Get a specific subscription by its slug.
+     */
     public function planSubscription(string $subscriptionSlug): ?PlanSubscription
     {
         return $this->planSubscriptions()->where('slug', $subscriptionSlug)->first();
     }
 
+    /**
+     * Get the most recent active subscription regardless of slug.
+     */
+    public function currentSubscription(): ?PlanSubscription
+    {
+        return $this->planSubscriptions()
+            ->where('ends_at', '>', now())
+            ->latest('id')
+            ->first();
+    }
+
+    /**
+     * Get all plans the subscriber is actively subscribed to.
+     */
     public function subscribedPlans(): Collection
     {
         $planIds = $this->planSubscriptions->reject->inactive()->pluck('plan_id')->unique();
@@ -42,6 +62,9 @@ trait HasPlanSubscriptions
         return $model::whereIn('id', $planIds)->get();
     }
 
+    /**
+     * Check if the subscriber has an active subscription to the given plan.
+     */
     public function subscribedTo(int $planId): bool
     {
         $subscription = $this->planSubscriptions()->where('plan_id', $planId)->first();
@@ -49,6 +72,17 @@ trait HasPlanSubscriptions
         return $subscription && $subscription->active();
     }
 
+    /**
+     * Check if the subscriber has any active subscription at all.
+     */
+    public function hasActiveSubscription(): bool
+    {
+        return $this->planSubscriptions->contains(fn ($sub) => $sub->active());
+    }
+
+    /**
+     * Subscribe to a new plan.
+     */
     public function newPlanSubscription(string $subscription, Plan $plan, ?Carbon $startDate = null): PlanSubscription
     {
         $trial = new Period($plan->trial_interval ?? 'day', $plan->trial_period ?? 0, $startDate ?? now());

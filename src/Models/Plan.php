@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Crumbls\Subscriptions\Models;
 
 use Crumbls\Subscriptions\Enums\Interval;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -131,6 +132,30 @@ class Plan extends Model implements Sortable
 
         return $this->hasMany($model, 'plan_id');
     }
+
+    // ── Scopes ───────────────────────────────────────────────────────
+
+    public function scopeActive(Builder $builder): Builder
+    {
+        return $builder->where('is_active', true);
+    }
+
+    public function scopeInactive(Builder $builder): Builder
+    {
+        return $builder->where('is_active', false);
+    }
+
+    public function scopeFree(Builder $builder): Builder
+    {
+        return $builder->where('price', '<=', 0);
+    }
+
+    public function scopePaid(Builder $builder): Builder
+    {
+        return $builder->where('price', '>', 0);
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────
 
     public function isFree(): bool
     {

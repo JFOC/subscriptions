@@ -209,10 +209,50 @@ return [
 ];
 ```
 
+### Extending / Overriding Models
+
+Every model in this package is resolved through config, so you can swap in your own. Extend the base model, then update `config/subscriptions.php`:
+
+```php
+// app/Models/Plan.php
+namespace App\Models;
+
+use Crumbls\Subscriptions\Models\Plan as BasePlan;
+
+class Plan extends BasePlan
+{
+    public function cancel(bool $immediately = false): static
+    {
+        // Cancel the recurring payment with your payment provider
+        $this->subscriber->paymentProvider()->cancelSubscription($this);
+
+        return parent::cancel($immediately);
+    }
+}
+```
+
+```php
+// config/subscriptions.php
+'models' => [
+    'plan' => \App\Models\Plan::class,
+    // ...
+],
+```
+
+All relationships, scopes, traits, and the prune command resolve models through config — your custom models will be used everywhere automatically. No container bindings or service provider changes needed.
+
+### Scheduling the pruner
+
+```php
+// routes/console.php or bootstrap/app.php
+Schedule::command('subscriptions:prune --force')->daily();
+```
+
 ## Considerations
 
 - **Payments are out of scope.** This package handles plan/subscription logic only. Integrate with Stripe, Paddle, etc. separately.
-- Override model classes in config if you need custom logic for `renew()`, `cancel()`, etc.
+- **Translatable fields**: `name` and `description` on plans, features, and subscriptions are stored as JSON and support multiple locales via [spatie/laravel-translatable](https://github.com/spatie/laravel-translatable).
+- **Soft deletes**: All models use soft deletes. The prune command only soft-deletes; use `forceDelete()` if you need permanent removal.
 
 ## License
 
