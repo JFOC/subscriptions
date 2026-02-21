@@ -1,0 +1,14 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    paths:
+        - src
+    level: 5
+    parallel:
+        maximumNumberOfProcesses: 1
+    ignoreErrors:
+        - identifier: trait.unused
+        -
+            message: '#Call to an undefined method Illuminate\\Database\\Eloquent\\Relations\\HasMany::byFeatureSlug#'
+            reportUnmatched: false

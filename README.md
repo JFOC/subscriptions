@@ -1,57 +1,54 @@
-# Rinvex Subscriptions
+# Crumbls Subscriptions
 
-⚠️ This package is abandoned and no longer maintained. No replacement package was suggested. ⚠️
+A flexible plans and subscription management system for Laravel. Manage SaaS plans, features, and subscriber usage tracking without coupling to any payment provider.
 
-👉 If you are interested to step on as the main maintainer of this package, please [reach out to me](https://twitter.com/omranic)!
+> **Inspired by** [rinvex/laravel-subscriptions](https://github.com/rinvex/laravel-subscriptions), which is now abandoned. This package modernizes the codebase for Laravel 11/12, PHP 8.2+, and current Laravel conventions.
 
----
+## Features
 
-**Rinvex Subscriptions** is a flexible plans and subscription management system for Laravel, with the required tools to run your SAAS like services efficiently. It's simple architecture, accompanied by powerful underlying to afford solid platform for your business.
+- Plan management with trial, grace, and invoice periods
+- Feature-based usage tracking with automatic resets
+- Polymorphic subscriptions — attach to any model
+- Grace period support — subscriptions stay active during grace window
+- Lifecycle events — hook into created, canceled, renewed, plan changed
+- Translatable plan names and descriptions (via Spatie)
+- Sortable plans and features (via Spatie)
+- Configurable table names and swappable models
+- Artisan command to prune expired subscriptions
+- PHPStan level 5 clean
 
-[![Packagist](https://img.shields.io/packagist/v/rinvex/laravel-subscriptions.svg?label=Packagist&style=flat-square)](https://packagist.org/packages/rinvex/laravel-subscriptions)
-[![Scrutinizer Code Quality](https://img.shields.io/scrutinizer/g/rinvex/laravel-subscriptions.svg?label=Scrutinizer&style=flat-square)](https://scrutinizer-ci.com/g/rinvex/laravel-subscriptions/)
-[![Travis](https://img.shields.io/travis/rinvex/laravel-subscriptions.svg?label=TravisCI&style=flat-square)](https://travis-ci.org/rinvex/laravel-subscriptions)
-[![StyleCI](https://styleci.io/repos/93313402/shield)](https://styleci.io/repos/93313402)
-[![License](https://img.shields.io/packagist/l/rinvex/laravel-subscriptions.svg?label=License&style=flat-square)](https://github.com/rinvex/laravel-subscriptions/blob/develop/LICENSE)
+## Requirements
 
-
-## Considerations
-
-- Payments are out of scope for this package.
-- You may want to extend some of the core models, in case you need to override the logic behind some helper methods like `renew()`, `cancel()` etc. E.g.: when cancelling a subscription you may want to also cancel the recurring payment attached.
-
+- PHP 8.2+
+- Laravel 11 or 12
 
 ## Installation
 
-1. Install the package via composer:
-    ```shell
-    composer require rinvex/laravel-subscriptions
-    ```
+```bash
+composer require crumbls/subscriptions
+```
 
-2. Publish resources (migrations and config files):
-    ```shell
-    php artisan rinvex:publish:subscriptions
-    ```
+Publish config and migrations (optional):
 
-3. Execute migrations via the following command:
-    ```shell
-    php artisan rinvex:migrate:subscriptions
-    ```
+```bash
+php artisan vendor:publish --tag=subscriptions-config
+php artisan vendor:publish --tag=subscriptions-migrations
+```
 
-4. Done!
+Run migrations:
 
+```bash
+php artisan migrate
+```
+
+Migrations autoload by default. Set `autoload_migrations` to `false` in `config/subscriptions.php` to disable this.
 
 ## Usage
 
-### Add Subscriptions to User model
-
-**Rinvex Subscriptions** has been specially made for Eloquent and simplicity has been taken very serious as in any other Laravel related aspect. To add Subscription functionality to your User model just use the `\Rinvex\Subscriptions\Traits\HasPlanSubscriptions` trait like this:
+### Add subscriptions to a model
 
 ```php
-namespace App\Models;
-
-use Rinvex\Subscriptions\Traits\HasPlanSubscriptions;
-use Illuminate\Foundation\Auth\User as Authenticatable;
+use Crumbls\Subscriptions\Traits\HasPlanSubscriptions;
 
 class User extends Authenticatable
 {
@@ -59,14 +56,14 @@ class User extends Authenticatable
 }
 ```
 
-That's it, we only have to use that trait in our User model! Now your users may subscribe to plans.
+Works on any Eloquent model — not just User.
 
-> **Note:** you can use `HasPlanSubscriptions` trait on any subscriber model, it doesn't have to be the user model, in fact any model will do.
-
-### Create a Plan
+### Create a plan
 
 ```php
-$plan = app('rinvex.subscriptions.plan')->create([
+use Crumbls\Subscriptions\Models\Plan;
+
+$plan = Plan::create([
     'name' => 'Pro',
     'description' => 'Pro plan',
     'price' => 9.99,
@@ -75,286 +72,148 @@ $plan = app('rinvex.subscriptions.plan')->create([
     'invoice_interval' => 'month',
     'trial_period' => 15,
     'trial_interval' => 'day',
-    'sort_order' => 1,
+    'grace_period' => 7,
+    'grace_interval' => 'day',
     'currency' => 'USD',
 ]);
+```
 
-// Create multiple plan features at once
-$plan->features()->saveMany([
-    new PlanFeature(['name' => 'listings', 'value' => 50, 'sort_order' => 1]),
-    new PlanFeature(['name' => 'pictures_per_listing', 'value' => 10, 'sort_order' => 5]),
-    new PlanFeature(['name' => 'listing_duration_days', 'value' => 30, 'sort_order' => 10, 'resettable_period' => 1, 'resettable_interval' => 'month']),
-    new PlanFeature(['name' => 'listing_title_bold', 'value' => 'Y', 'sort_order' => 15])
+Intervals accept: `hour`, `day`, `week`, `month`, `year`.
+
+### Add features to a plan
+
+```php
+$plan->features()->create([
+    'name' => 'API Requests',
+    'slug' => 'api-requests',
+    'value' => '1000',
+    'resettable_period' => 1,
+    'resettable_interval' => 'month',
+]);
+
+// Boolean features
+$plan->features()->create([
+    'name' => 'SSL',
+    'slug' => 'ssl',
+    'value' => 'true', // always available
 ]);
 ```
 
-### Get Plan Details
-
-You can query the plan for further details, using the intuitive API as follows:
+### Subscribe a user
 
 ```php
-$plan = app('rinvex.subscriptions.plan')->find(1);
-
-// Get all plan features                
-$plan->features;
-
-// Get all plan subscriptions
-$plan->planSubscriptions;
-
-// Check if the plan is free
-$plan->isFree();
-
-// Check if the plan has trial period
-$plan->hasTrial();
-
-// Check if the plan has grace period
-$plan->hasGrace();
-```
-
-Both `$plan->features` and `$plan->planSubscriptions` are collections, driven from relationships, and thus you can query these relations as any normal Eloquent relationship. E.g. `$plan->features()->where('name', 'listing_title_bold')->first()`.
-
-### Get Feature Value
-
-Say you want to show the value of the feature _pictures_per_listing_ from above. You can do so in many ways:
-
-```php
-// Use the plan instance to get feature's value
-$amountOfPictures = $plan->getFeatureBySlug('pictures_per_listing')->value;
-
-// Query the feature itself directly
-$amountOfPictures = app('rinvex.subscriptions.plan_feature')->where('slug', 'pictures_per_listing')->first()->value;
-
-// Get feature value through the subscription instance
-$amountOfPictures = app('rinvex.subscriptions.plan_subscription')->find(1)->getFeatureValue('pictures_per_listing');
-```
-
-### Create a Subscription
-
-You can subscribe a user to a plan by using the `newSubscription()` function available in the `HasPlanSubscriptions` trait. First, retrieve an instance of your subscriber model, which typically will be your user model and an instance of the plan your user is subscribing to. Once you have retrieved the model instance, you may use the `newSubscription` method to create the model's subscription.
-
-```php
-$user = User::find(1);
-$plan = app('rinvex.subscriptions.plan')->find(1);
-
 $user->newPlanSubscription('main', $plan);
 ```
 
-The first argument passed to `newSubscription` method should be the title of the subscription. If your application offer a single subscription, you might call this `main` or `primary`, while the second argument is the plan instance your user is subscribing to, and there's an optional third parameter to specify custom start date as an instance of `Carbon\Carbon` (by default if not provided, it will start now).
-
-### Change the Plan
-
-You can change subscription plan easily as follows:
+### Check subscription status
 
 ```php
-$plan = app('rinvex.subscriptions.plan')->find(2);
-$subscription = app('rinvex.subscriptions.plan_subscription')->find(1);
+$user->subscribedTo($plan->id);               // bool
+$subscription = $user->planSubscription('main');
 
-// Change subscription plan
-$subscription->changePlan($plan);
+$subscription->active();       // true if not ended, or on trial/grace
+$subscription->onTrial();      // currently in trial period
+$subscription->onGracePeriod(); // ended but within grace window
+$subscription->canceled();     // has been canceled
+$subscription->ended();        // period has expired
+$subscription->inactive();     // opposite of active
 ```
 
-If both plans (current and new plan) have the same billing frequency (e.g., `invoice_period` and `invoice_interval`) the subscription will retain the same billing dates. If the plans don't have the same billing frequency, the subscription will have the new plan billing frequency, starting on the day of the change and _the subscription usage data will be cleared_. Also if the new plan has a trial period and it's a new subscription, the trial period will be applied.
-
-### Feature Options
-
-Plan features are great for fine-tuning subscriptions, you can top-up certain feature for X times of usage, so users may then use it only for that amount. Features also have the ability to be resettable and then it's usage could be expired too. See the following examples:
+### Feature usage
 
 ```php
-// Find plan feature
-$feature = app('rinvex.subscriptions.plan_feature')->where('name', 'listing_duration_days')->first();
-
-// Get feature reset date
-$feature->getResetDate(new \Carbon\Carbon());
+$subscription->recordFeatureUsage('api-requests');
+$subscription->recordFeatureUsage('api-requests', 5);           // add 5
+$subscription->recordFeatureUsage('api-requests', 10, false);   // set to 10
+$subscription->reduceFeatureUsage('api-requests', 3);
+$subscription->canUseFeature('api-requests');      // bool
+$subscription->getFeatureUsage('api-requests');     // int
+$subscription->getFeatureRemainings('api-requests'); // int
+$subscription->getFeatureValue('api-requests');     // raw value
 ```
 
-### Subscription Feature Usage
-
-There's multiple ways to determine the usage and ability of a particular feature in the user subscription, the most common one is `canUseFeature`:
-
-The `canUseFeature` method returns `true` or `false` depending on multiple factors:
-
-- Feature _is enabled_.
-- Feature value isn't `0`/`false`/`NULL`.
-- Or feature has remaining uses available.
+### Plan changes
 
 ```php
-$user->planSubscription('main')->canUseFeature('listings');
-```
-
-Other feature methods on the user subscription instance are:
-
-- `getFeatureUsage`: returns how many times the user has used a particular feature.
-- `getFeatureRemainings`: returns available uses for a particular feature.
-- `getFeatureValue`: returns the feature value.
-
-> All methods share the same signature: e.g. `$user->planSubscription('main')->getFeatureUsage('listings');`.
-
-### Record Feature Usage
-
-In order to effectively use the ability methods you will need to keep track of every usage of each feature (or at least those that require it). You may use the `recordFeatureUsage` method available through the user `subscription()` method:
-
-```php
-$user->planSubscription('main')->recordFeatureUsage('listings');
-```
-
-The `recordFeatureUsage` method accept 3 parameters: the first one is the feature's name, the second one is the quantity of uses to add (default is `1`), and the third one indicates if the addition should be incremental (default behavior), when disabled the usage will be override by the quantity provided. E.g.:
-
-```php
-// Increment by 2
-$user->planSubscription('main')->recordFeatureUsage('listings', 2);
-
-// Override with 9
-$user->planSubscription('main')->recordFeatureUsage('listings', 9, false);
-```
-
-### Reduce Feature Usage
-
-Reducing the feature usage is _almost_ the same as incrementing it. Here we only _substract_ a given quantity (default is `1`) to the actual usage:
-
-```php
-$user->planSubscription('main')->reduceFeatureUsage('listings', 2);
-```
-
-### Clear The Subscription Usage Data
-
-```php
-$user->planSubscription('main')->usage()->delete();
-```
-
-### Check Subscription Status
-
-For a subscription to be considered active _one of the following must be `true`_:
-
-- Subscription has an active trial.
-- Subscription `ends_at` is in the future.
-
-```php
-$user->subscribedTo($planId);
-```
-
-Alternatively you can use the following methods available in the subscription model:
-
-```php
-$user->planSubscription('main')->active();
-$user->planSubscription('main')->canceled();
-$user->planSubscription('main')->ended();
-$user->planSubscription('main')->onTrial();
-```
-
-> Canceled subscriptions with an active trial or `ends_at` in the future are considered active.
-
-### Renew a Subscription
-
-To renew a subscription you may use the `renew` method available in the subscription model. This will set a new `ends_at` date based on the selected plan and _will clear the usage data_ of the subscription.
-
-```php
-$user->planSubscription('main')->renew();
-```
-
-_Canceled subscriptions with an ended period can't be renewed._
-
-### Cancel a Subscription
-
-To cancel a subscription, simply use the `cancel` method on the user's subscription:
-
-```php
-$user->planSubscription('main')->cancel();
-```
-
-By default the subscription will remain active until the end of the period, you may pass `true` to end the subscription _immediately_:
-
-```php
-$user->planSubscription('main')->cancel(true);
+$subscription->changePlan($newPlan);
+$subscription->renew();
+$subscription->cancel();          // cancel at end of period
+$subscription->cancel(true);      // cancel immediately
 ```
 
 ### Scopes
 
-#### Subscription Model
-
 ```php
-// Get subscriptions by plan
-$subscriptions = app('rinvex.subscriptions.plan_subscription')->byPlanId($plan_id)->get();
+use Crumbls\Subscriptions\Models\PlanSubscription;
 
-// Get bookings of the given user
-$user = \App\Models\User::find(1);
-$bookingsOfSubscriber = app('rinvex.subscriptions.plan_subscription')->ofSubscriber($user)->get(); 
-
-// Get subscriptions with trial ending in 3 days
-$subscriptions = app('rinvex.subscriptions.plan_subscription')->findEndingTrial(3)->get();
-
-// Get subscriptions with ended trial
-$subscriptions = app('rinvex.subscriptions.plan_subscription')->findEndedTrial()->get();
-
-// Get subscriptions with period ending in 3 days
-$subscriptions = app('rinvex.subscriptions.plan_subscription')->findEndingPeriod(3)->get();
-
-// Get subscriptions with ended period
-$subscriptions = app('rinvex.subscriptions.plan_subscription')->findEndedPeriod()->get();
+PlanSubscription::findActive()->get();
+PlanSubscription::findEndingPeriod(7)->get();
+PlanSubscription::findEndedPeriod()->get();
+PlanSubscription::findEndingTrial(3)->get();
+PlanSubscription::findEndedTrial()->get();
+PlanSubscription::ofSubscriber($user)->get();
+PlanSubscription::byPlanId($plan->id)->get();
 ```
 
-### Models
+### Events
 
-**Rinvex Subscriptions** uses 4 models:
+All lifecycle actions dispatch events you can listen to:
+
+| Event | Fired when |
+|---|---|
+| `SubscriptionCreated` | A new subscription is created |
+| `SubscriptionCanceled` | A subscription is canceled (includes `$immediate` flag) |
+| `SubscriptionRenewed` | A subscription is renewed |
+| `SubscriptionPlanChanged` | A subscription switches plans (includes `$oldPlan` and `$newPlan`) |
 
 ```php
-Rinvex\Subscriptions\Models\Plan;
-Rinvex\Subscriptions\Models\PlanFeature;
-Rinvex\Subscriptions\Models\PlanSubscription;
-Rinvex\Subscriptions\Models\PlanSubscriptionUsage;
+use Crumbls\Subscriptions\Events\SubscriptionCreated;
+
+class SendWelcomeEmail
+{
+    public function handle(SubscriptionCreated $event): void
+    {
+        $event->subscription->subscriber->notify(/* ... */);
+    }
+}
 ```
 
+### Pruning expired subscriptions
 
-## Roadmap
+```bash
+php artisan subscriptions:prune              # soft-deletes canceled subs older than 30 days
+php artisan subscriptions:prune --days=90    # custom threshold
+php artisan subscriptions:prune --force      # skip confirmation
+```
 
-**Looking for contributors!**
+## Configuration
 
-The following are a set of limitations to be improved, or feature requests that's looking for contributors to implement, all PRs are welcome 🙂
+Publish the config to customize table names or swap model classes:
 
-- [ ] Allow paying for multiple occurrences of the same plan (i.e. monthly plan, user can pay for 6 months of that plan) (#64)
-- [ ] Plan prorate fields in database isn't utilized, this should be implemented to consolidate extension dates, and prices (#68)
-- [ ] Change *features* to be in a many-to-many relationship with plans. Multiple plans can have the same feature, and many plans can have many features as well (#101)
-- [ ] Plan subscription timezone field in database isn't utilized, this should be implemented to respect timezone on date calculations (i.e. starts_at, ends_at, trial_ends_at) (#78)
-- [ ] Separate trial feature from the subscription periods and adjust subscriptions accordingly. Users should be able to have a trial period without having a subscription at all (#67)
+```php
+// config/subscriptions.php
+return [
+    'autoload_migrations' => true,
+    'tables' => [
+        'plans' => 'plans',
+        'plan_features' => 'plan_features',
+        'plan_subscriptions' => 'plan_subscriptions',
+        'plan_subscription_usage' => 'plan_subscription_usage',
+    ],
+    'models' => [
+        'plan' => \Crumbls\Subscriptions\Models\Plan::class,
+        'plan_feature' => \Crumbls\Subscriptions\Models\PlanFeature::class,
+        'plan_subscription' => \Crumbls\Subscriptions\Models\PlanSubscription::class,
+        'plan_subscription_usage' => \Crumbls\Subscriptions\Models\PlanSubscriptionUsage::class,
+    ],
+];
+```
 
-## Changelog
+## Considerations
 
-Refer to the [Changelog](CHANGELOG.md) for a full history of the project.
-
-
-## Support
-
-The following support channels are available at your fingertips:
-
-- [Chat on Slack](https://bit.ly/rinvex-slack)
-- [Help on Email](mailto:help@rinvex.com)
-- [Follow on Twitter](https://twitter.com/rinvex)
-
-
-## Contributing & Protocols
-
-Thank you for considering contributing to this project! The contribution guide can be found in [CONTRIBUTING.md](CONTRIBUTING.md).
-
-Bug reports, feature requests, and pull requests are very welcome.
-
-- [Versioning](CONTRIBUTING.md#versioning)
-- [Pull Requests](CONTRIBUTING.md#pull-requests)
-- [Coding Standards](CONTRIBUTING.md#coding-standards)
-- [Feature Requests](CONTRIBUTING.md#feature-requests)
-- [Git Flow](CONTRIBUTING.md#git-flow)
-
-
-## Security Vulnerabilities
-
-If you discover a security vulnerability within this project, please send an e-mail to [help@rinvex.com](help@rinvex.com). All security vulnerabilities will be promptly addressed.
-
-
-## About Rinvex
-
-Rinvex is a software solutions startup, specialized in integrated enterprise solutions for SMEs established in Alexandria, Egypt since June 2016. We believe that our drive The Value, The Reach, and The Impact is what differentiates us and unleash the endless possibilities of our philosophy through the power of software. We like to call it Innovation At The Speed Of Life. That’s how we do our share of advancing humanity.
-
+- **Payments are out of scope.** This package handles plan/subscription logic only. Integrate with Stripe, Paddle, etc. separately.
+- Override model classes in config if you need custom logic for `renew()`, `cancel()`, etc.
 
 ## License
 
-This software is released under [The MIT License (MIT)](LICENSE).
-
-(c) 2016-2022 Rinvex LLC, Some rights reserved.
+MIT
