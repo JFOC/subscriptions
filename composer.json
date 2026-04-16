@@ -1,5 +1,5 @@
 {
-    "name": "crumbls/subscriptions",
+    "name": "jfoc/subscriptions",
     "description": "A flexible plans and subscription management system for Laravel. Manage your SaaS plans, features, and subscriber usage with ease.",
     "type": "library",
     "keywords": [
